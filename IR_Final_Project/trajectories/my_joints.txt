@@ -1,0 +1,6 @@
+T:0 theta1:0 theta2:0 theta3:0 theta4:0 theta5:0 theta6:0
+T:2 theta1:30 theta2:-30 theta3:60 theta4:0 theta5:0 theta6:0
+T:4 theta1:60 theta2:-45 theta3:90 theta4:30 theta5:0 theta6:0
+T:6 theta1:90 theta2:-30 theta3:90 theta4:45 theta5:30 theta6:0
+T:8 theta1:0 theta2:-45 theta3:90 theta4:0 theta5:45 theta6:0
+T:10 theta1:0 theta2:0 theta3:0 theta4:0 theta5:0 theta6:0

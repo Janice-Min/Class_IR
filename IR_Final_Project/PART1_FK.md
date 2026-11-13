@@ -1,0 +1,120 @@
+# Part 1: Forward Kinematics
+
+*[한국어](PART1_FK.ko.md)*
+
+The RB5 is commanded with 6 joint angles. Forward kinematics (FK) answers: for these joint
+angles, where is the hand, and which way does it point? In this part you write the FK of the
+RB5 twice: once by deriving it yourself, and once with MuJoCo's functions, the way you
+would in practice. Then you check both against the simulator by playing joint-angle files.
+
+## 1. What to implement
+
+### 1.1 Your own FK
+
+Fill in `forward_kinematics()` in **`student_kinematics.py`**:
+
+```python
+def forward_kinematics(q, tool=np.eye(4)) -> T   # 4x4 pose of the tool frame in the base frame
+```
+
+| Argument | Meaning |
+|---|---|
+| `q` | (6,) joint angles [rad]: base, shoulder, elbow, wrist1, wrist2, wrist3 |
+| `tool` | (4, 4) pose of a tool frame in the flange frame. Identity = the flange itself. The robot passes the hand's `grasp` site here (for the basic hand: 90 mm along the flange z axis) |
+| returns `T` | (4, 4) homogeneous transform T_base_tool = T_base_flange(q) · tool |
+
+Use NumPy only. Don't import `mujoco` or `rb5_sim` in this file (the scripts check this).
+The robot moves with this function, and the point is to derive the kinematics yourself.
+
+### 1.2 FK with MuJoCo
+
+Fill in `mujoco_fk()` in **`student_mujoco.py`**:
+
+```python
+def mujoco_fk(model, data, q, site="tcp") -> T   # 4x4 pose of a site, from MuJoCo
+```
+
+| Argument | Meaning |
+|---|---|
+| `model`, `data` | the simulation's `MjModel` and a scratch `MjData` for you (changing it never moves the robot) |
+| `q` | (6,) joint angles [rad], same order as above |
+| `site` | `"tcp"` = the flange, `"grasp"` = the hand's grasp site |
+| returns `T` | (4, 4) pose of the site in the base frame |
+
+Here you use MuJoCo and NumPy (not `rb5_sim`). You need: the joint addresses in `qpos`
+(`model.joint(name).qposadr`), `mujoco.mj_kinematics`, and the site pose in `data.site_xpos`
+and `data.site_xmat`. The model also holds the fingers and the pipette, so the arm joints
+are not simply `qpos[0:6]`. The file header lists the functions with short notes.
+
+## 2. The robot
+
+The geometry comes from `assets/rb5_850e/rb5_850e.xml`. Each link frame is the parent frame
+moved by an offset, then rotated by its joint about the joint axis (in the new frame).
+All link frames are parallel when q = 0.
+
+| Joint | Offset from the previous frame [m] | Axis |
+|---|---|---|
+| 1 base | (0, 0, 0.1692) | z |
+| 2 shoulder | (0, 0, 0) | y |
+| 3 elbow | (0, 0, 0.425) | y |
+| 4 wrist1 | (0, 0, 0.392) | y |
+| 5 wrist2 | (0, −0.1107, 0.1107) | z |
+| 6 wrist3 | (0, 0, 0) | y |
+| flange | (0, −0.0967, 0), then rotated +90° about x | - |
+
+The flange frame has z pointing out of the flange. At q = 0 the arm points straight up.
+
+You can chain these transforms directly or derive a Denavit–Hartenberg table from them;
+either is fine. Explain your choice in the presentation. Some values to check against:
+
+| q [deg] | flange position [m] | flange rotation |
+|---|---|---|
+| (0, 0, 0, 0, 0, 0) | (0, −0.2074, 1.0969) | [[1, 0, 0], [0, 0, −1], [0, 1, 0]] |
+| (90, 0, 90, 0, 0, 0) | (0.2074, 0.5027, 0.5942) | [[0, 0, 1], [0, 1, 0], [−1, 0, 0]] |
+
+## 3. Joint files
+
+A joint file is a time series of joint angles, one waypoint per line, as `key:value` pairs:
+
+```
+# comment
+T:0  theta1:31.27 theta2:-28.19 theta3:130.43 theta4:77.76 theta5:-58.73 theta6:90
+T:2  theta1:0     theta2:-28.19 theta3:130.43 theta4:77.76 theta5:-58.73 theta6:90
+```
+
+- `T`: the time [s] at which the robot reaches the line; it must increase. The first line
+  is where the robot starts.
+- `theta1` … `theta6`: joint angles in **degrees**.
+
+The robot moves smoothly between the lines. `trajectories/joints_example.txt` is an example.
+
+## 4. Test it
+
+```
+uv run part1_fk.py                                          # graded test
+uv run part1_fk.py trajectories/joints_example.txt          # play a joint file in the viewer
+uv run part1_fk.py trajectories/joints_example.txt --out my_poses.txt   # save your FK poses
+```
+
+- **Graded test** (no file): at 100 random joint angles per case, `forward_kinematics()` is
+  compared with the simulator for the flange, the basic hand's grasp site and random tool
+  frames, and `mujoco_fk()` for the sites `tcp` and `grasp`. Each case passes when the
+  position is within 0.001 mm and the rotation within 1e-6 rad. Each section reports on its
+  own (or says "not implemented yet"), so you can do them in any order.
+- **Playing a file**: the viewer draws the grasp-site frame from **your** FK (long axes:
+  x red, y green, z blue) and the trail it leaves. If your FK is right, the frame sits on the
+  hand between the fingers. At every waypoint the script prints your FK position next to the
+  simulator's and the error.
+- `--out` saves your FK result as a pose file: the input format of Part 2.
+
+## 5. Final presentation
+
+There is nothing to hand in. Each team presents, and for Part 1 shows:
+
+- **A video** of your own joint file (at least 5 waypoints), recorded with
+  `uv run part1_fk.py my_joints.txt --headless --video part1.mp4`. Your FK frame must stay on
+  the hand for the whole motion. Reference: [what it should look like](https://youtu.be/VN9uyTWR938)
+  (that video plays the example file; show your own).
+- The result of the graded test (`uv run part1_fk.py`), with both your FK and the MuJoCo FK.
+- Your kinematic model (transform chain or DH table) with a figure of the frames.
+- How your `mujoco_fk()` works, and what you had to watch out for in MuJoCo.
