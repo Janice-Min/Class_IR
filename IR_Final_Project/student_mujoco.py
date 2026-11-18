@@ -44,14 +44,10 @@ def mujoco_fk(model: mujoco.MjModel, data: mujoco.MjData, q: np.ndarray, site: s
 
     Returns the (4, 4) homogeneous transform of the site in the base frame.
     """
-    q = np.asarray(q, dtype=float).reshape(6)
-
-    # The model contains more than the arm: do not assume qpos[:6].
-    for i, joint_name in enumerate(ARM_JOINTS):
-        qpos_index = model.joint(joint_name).qposadr[0]
-        data.qpos[qpos_index] = q[i]
-
-    # Compute world-frame positions and orientations at this configuration.
+    # Look up addresses: the model also contains joints outside the arm.
+    for name, angle in zip(ARM_JOINTS, q):
+        address = model.joint(name).qposadr[0]
+        data.qpos[address] = angle
     mujoco.mj_kinematics(model, data)
 
     site_id = model.site(site).id

@@ -62,45 +62,28 @@ def forward_kinematics(q: np.ndarray, tool: np.ndarray = np.eye(4)) -> np.ndarra
 
     Returns the (4, 4) homogeneous transform T_base_tool.
     """
-    # RB5 joint angles (radians): base, shoulder, elbow, wrist1, wrist2, wrist3.
-    q = np.asarray(q, dtype=float).reshape(6)
-
-    def translation(x, y, z):
-        T = np.eye(4)
-        T[:3, 3] = [x, y, z]
-        return T
-
-    def rotation_x(a):
-        c, s = np.cos(a), np.sin(a)
-        T = np.eye(4)
-        T[:3, :3] = [[1, 0, 0], [0, c, -s], [0, s, c]]
-        return T
-
-    def rotation_y(a):
-        c, s = np.cos(a), np.sin(a)
-        T = np.eye(4)
-        T[:3, :3] = [[c, 0, s], [0, 1, 0], [-s, 0, c]]
-        return T
-
-    def rotation_z(a):
-        c, s = np.cos(a), np.sin(a)
-        T = np.eye(4)
-        T[:3, :3] = [[c, -s, 0], [s, c, 0], [0, 0, 1]]
-        return T
-
-    # Transform chain from the RB5 MJCF; units are meters.
-    # Each joint frame is translated first, then rotated about its local axis.
+    # Each joint first translates in its parent frame, then rotates locally.
+    offsets = ((0, 0, 0.1692), (0, 0, 0), (0, 0, 0.425),
+               (0, 0, 0.392), (0, -0.1107, 0.1107), (0, 0, 0))
+    axes = ("z", "y", "y", "y", "z", "y")
     T = np.eye(4)
-    T = T @ translation(0, 0, 0.1692) @ rotation_z(q[0])  # base
-    T = T @ rotation_y(q[1])                               # shoulder
-    T = T @ translation(0, 0, 0.425) @ rotation_y(q[2])   # elbow
-    T = T @ translation(0, 0, 0.392) @ rotation_y(q[3])   # wrist1
-    T = T @ translation(0, -0.1107, 0.1107) @ rotation_z(q[4])  # wrist2
-    T = T @ rotation_y(q[5])                               # wrist3
+    for angle, offset, axis in zip(q, offsets, axes):
+        c, s = np.cos(angle), np.sin(angle)
+        if axis == "z":
+            R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+        else:
+            R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+        joint = np.eye(4)
+        joint[:3, :3] = R
+        joint[:3, 3] = offset
+        T = T @ joint
 
-    # Flange's local +z is outward from the tool mounting face.
-    T_base_flange = T @ translation(0, -0.0967, 0) @ rotation_x(np.pi / 2)
-    return T_base_flange @ np.asarray(tool, dtype=float)
+    # Fixed flange: translate along link6 -y, then rotate +90 deg about x.
+    flange = np.array([[1, 0, 0, 0],
+                       [0, 0, -1, -0.0967],
+                       [0, 1, 0, 0],
+                       [0, 0, 0, 1]], dtype=float)
+    return T @ flange @ tool
 
 
 # ---- Part 2: Jacobian and inverse kinematics -----------------------------------------
@@ -216,4 +199,3 @@ def inverse_kinematics(target: np.ndarray, q_init: np.ndarray, tool: np.ndarray 
             lam = max(lam * 0.5, 1e-5)
 
     return q, err
-
