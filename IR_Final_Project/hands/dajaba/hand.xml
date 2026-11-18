@@ -1,0 +1,205 @@
+<!--
+  RB5 double gear-linkage hand (Inventor assembly x2, as in RB5_gripper_22.3mf).
+  *** PROPOSED CAD CHANGE (preview) ***  Same as hand.xml, except the toothed edge of every finger
+  is turned ~11 deg (tooth tips at the fingertip set back ~3.6 mm, at the lower end ~3.6 mm further in)
+  so the two toothed faces are PARALLEL when they close; the grasp point moves to the middle of the
+  teeth. Only the hidden collision pads changed - the visible finger meshes still show the current teeth.
+
+  Two copies of the gripper assembly, back to back along CAD y (copy 2 is turned 180 deg about
+  CAD z and shifted -38.33 mm, from the 3MF build transforms):
+    g_*  copy 1 : grips the pipette shaft          actuator "gripper"  (position, force-limited)
+    s_*  copy 2 : squeezes the bulb, 59.7 mm above  actuator "squeezer" (motor: ctrl = gear torque)
+  The hand is mounted midway between the two flange disks (they overlap in the CAD - one
+  adapter plate is needed in the real build).
+
+  Hand frame (PART3_HAND.md): z = CAD z (approach), x = -CAD y (pipette axis, squeezer side up),
+  y = CAD x (closing). The grasp site is placed so the squeeze pads are 70 mm above it (bulb
+  centre); the grip pads then hold the shaft 10.3 mm above the nominal grasp point.
+
+  Meshes: Inventor parts snapped onto a consistent open pose (pivots from the STL holes):
+    G (+-32, 0) gear shaft | C (+-70, 58) crank tip - finger | K (+-40.0, 95.5) finger - coupler
+    S (+-12, 47) coupler - chassis standoff.   GEAR+CRANK are bolted -> one body.
+  Visual meshes don't collide (MuJoCo would use their convex hulls); hidden boxes do.
+-->
+<mujoco model="rb5_double_gear_gripper_parallel_teeth">
+  <compiler angle="radian" autolimits="true" meshdir="meshes"/>
+
+  <asset>
+    <mesh name="CHASSIS" file="CHASSIS.stl"/>
+    <mesh name="GEAR_R" file="GEAR_R.stl"/>
+    <mesh name="GEAR_L" file="GEAR_L.stl"/>
+    <mesh name="CRANK_R" file="CRANK_R.stl"/>
+    <mesh name="CRANK_L" file="CRANK_L.stl"/>
+    <mesh name="FINGER_R" file="FINGER_R.stl"/>
+    <mesh name="FINGER_L" file="FINGER_L.stl"/>
+    <mesh name="COUPLER_R" file="COUPLER_R.stl"/>
+    <mesh name="COUPLER_L" file="COUPLER_L.stl"/>
+  </asset>
+
+  <default>
+    <!-- STL in mm -> m; mass from the real (watertight) volume -->
+    <mesh scale="0.001 0.001 0.001" inertia="exact"/>
+    <default class="hand">
+      <geom contype="0" conaffinity="0" group="2" rgba="0.62 0.64 0.67 1"/>
+      <default class="visual">
+        <geom type="mesh" density="1250"/>               <!-- PLA -->
+      </default>
+      <!-- collision bits: hand geoms = contype 4, conaffinity 1|2 -> hit the pipette, bulb walls,
+           holder and bench, never each other. Fingers add bit 8 so left/right fingers collide. -->
+      <default class="col">
+        <geom contype="4" conaffinity="3" group="3" density="0" condim="3" friction="0.8 0.02 0.001" rgba="0.9 0.4 0.4 0.4"/>
+      </default>
+      <default class="col_finger_r">
+        <geom contype="12" conaffinity="3" group="3" density="0" condim="3" friction="0.8 0.02 0.001" rgba="0.9 0.4 0.4 0.4"/>
+      </default>
+      <default class="col_finger_l">
+        <geom contype="4" conaffinity="11" group="3" density="0" condim="3" friction="0.8 0.02 0.001" rgba="0.9 0.4 0.4 0.4"/>
+      </default>
+      <!-- the toothed inner edge of each finger (tooth tips), 15 mm wide -->
+      <default class="pad">
+        <geom type="box" contype="5" conaffinity="3" condim="4" friction="1.5 0.02 0.001"
+              solref="0.004 1" solimp="0.95 0.99 0.001" rgba="0.2 0.2 0.22 1" density="0" group="3"/>
+      </default>
+      <!-- damping keeps the pads slow (~0.05 m/s): a slam kicks the light pipette away -->
+      <default class="gear_g">
+        <joint type="hinge" damping="1.6" armature="0.002"/>
+      </default>
+      <!-- squeezer: light damping so it travels from wide open to the bulb within the 0.6 s -->
+      <default class="gear_s">
+        <joint type="hinge" damping="0.15" armature="0.002"/>
+      </default>
+      <default class="pin">
+        <joint type="hinge" damping="0.001" armature="1e-5"/>
+      </default>
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="hand" childclass="hand">
+      <site name="grasp" pos="-0.04014 0 0.228" size="0.004" rgba="1 0 0 1" group="1"/>
+      <frame name="cad" pos="-0.01917 0 0.068" quat="0.7071068 0 0 0.7071068">
+        <!-- ===== copy 1: grips the shaft ===== -->
+        <geom class="visual" mesh="CHASSIS" rgba="0.45 0.47 0.5 1"/>
+        <geom class="col" type="box" size="0.074 0.0035 0.0565" pos="0 -0.0155 0.0165"/>
+        <body name="g_gear_r" pos="0.032 0 0">
+          <joint name="g_gear_r" class="gear_g" axis="0 -1 0" range="-0.17 0.30"/>
+          <geom class="visual" mesh="GEAR_R"  pos="-0.032 0 0"/>
+          <geom class="visual" mesh="CRANK_R" pos="-0.032 0 0"/>
+          <geom class="col" type="cylinder" size="0.0339 0.0035" pos="0 -0.0065 0" euler="1.5708 0 0"/>
+          <geom class="col" type="box" size="0.006 0.003" fromto="0 0 0 0.04129 0 0.06302"/>
+          <body name="g_finger_r" pos="0.038 0 0.058">
+            <joint name="g_finger_r" class="pin" axis="0 1 0"/>
+            <geom class="visual" mesh="FINGER_R" pos="-0.07 0 -0.058" rgba="0.75 0.75 0.78 1"/>
+            <geom class="col_finger_r" type="box" size="0.0075 0.0075" fromto="0.00312 0.0107 -0.0039 -0.02999 0.0107 0.03747"/>
+            <geom class="col_finger_r" type="box" size="0.0052 0.0075" fromto="-0.02773 0.0107 0.03781 -0.04067 0.0107 0.12233"/>
+            <geom class="pad" size="0.001 0.0075 0.01975" pos="-0.04565 0.0107 0.09673" euler="0 0.0382 0"/>
+            <site name="g_finger_r_pin" pos="-0.02999 0 0.03747" size="0.002" group="3"/>
+          </body>
+        </body>
+        <body name="g_coupler_r" pos="0.012 0 0.047">
+          <joint name="g_coupler_r" class="pin" axis="0 1 0"/>
+          <geom class="visual" mesh="COUPLER_R" pos="-0.012 0 -0.047"/>
+          <geom class="col" type="box" size="0.005 0.0025" fromto="-0.002 0.021 -0.00346 0.03001 0.021 0.05193"/>
+          <site name="g_coupler_r_pin" pos="0.02801 0 0.04847" size="0.002" group="3"/>
+        </body>
+        <body name="g_gear_l" pos="-0.032 0 0">
+          <joint name="g_gear_l" class="gear_g" axis="0 1 0" range="-0.17 0.30"/>
+          <geom class="visual" mesh="GEAR_L"  pos="0.032 0 0"/>
+          <geom class="visual" mesh="CRANK_L" pos="0.032 0 0"/>
+          <geom class="col" type="cylinder" size="0.0339 0.0035" pos="0 -0.0065 0" euler="1.5708 0 0"/>
+          <geom class="col" type="box" size="0.006 0.003" fromto="0 0 0 -0.04129 0 0.06302"/>
+          <body name="g_finger_l" pos="-0.038 0 0.058">
+            <joint name="g_finger_l" class="pin" axis="0 -1 0"/>
+            <geom class="visual" mesh="FINGER_L" pos="0.07 0 -0.058" rgba="0.75 0.75 0.78 1"/>
+            <geom class="col_finger_l" type="box" size="0.0075 0.0075" fromto="-0.00312 0.0107 -0.0039 0.02999 0.0107 0.03747"/>
+            <geom class="col_finger_l" type="box" size="0.0052 0.0075" fromto="0.02773 0.0107 0.03781 0.04067 0.0107 0.12233"/>
+            <geom class="pad" size="0.001 0.0075 0.01975" pos="0.04565 0.0107 0.09673" euler="0 -0.0382 0"/>
+            <site name="g_finger_l_pin" pos="0.02999 0 0.03747" size="0.002" group="3"/>
+          </body>
+        </body>
+        <body name="g_coupler_l" pos="-0.012 0 0.047">
+          <joint name="g_coupler_l" class="pin" axis="0 -1 0"/>
+          <geom class="visual" mesh="COUPLER_L" pos="0.012 0 -0.047"/>
+          <geom class="col" type="box" size="0.005 0.0025" fromto="0.002 0.021 -0.00346 -0.03001 0.021 0.05193"/>
+          <site name="g_coupler_l_pin" pos="-0.02801 0 0.04847" size="0.002" group="3"/>
+        </body>
+
+        <!-- ===== copy 2: squeezes the bulb (copy 1 turned 180 deg about CAD z) ===== -->
+        <frame name="copy2" pos="0 -0.03833 0" quat="0 0 0 1">
+          <geom class="visual" mesh="CHASSIS" rgba="0.45 0.47 0.5 1"/>
+          <geom class="col" type="box" size="0.074 0.0035 0.0565" pos="0 -0.0155 0.0165"/>
+          <body name="s_gear_r" pos="0.032 0 0">
+            <joint name="s_gear_r" class="gear_s" axis="0 -1 0" range="-0.17 0.30"/>
+            <geom class="visual" mesh="GEAR_R"  pos="-0.032 0 0"/>
+            <geom class="visual" mesh="CRANK_R" pos="-0.032 0 0"/>
+            <geom class="col" type="cylinder" size="0.0339 0.0035" pos="0 -0.0065 0" euler="1.5708 0 0"/>
+            <geom class="col" type="box" size="0.006 0.003" fromto="0 0 0 0.04129 0 0.06302"/>
+            <body name="s_finger_r" pos="0.038 0 0.058">
+              <joint name="s_finger_r" class="pin" axis="0 1 0"/>
+              <geom class="visual" mesh="FINGER_R" pos="-0.07 0 -0.058" rgba="0.75 0.75 0.78 1"/>
+              <geom class="col_finger_r" type="box" size="0.0075 0.0075" fromto="0.00312 0.0107 -0.0039 -0.02999 0.0107 0.03747"/>
+              <geom class="col_finger_r" type="box" size="0.0052 0.0075" fromto="-0.02773 0.0107 0.03781 -0.04067 0.0107 0.12233"/>
+              <geom class="pad" size="0.001 0.0075 0.01975" pos="-0.04565 0.0107 0.09673" euler="0 0.0382 0"/>
+              <site name="s_finger_r_pin" pos="-0.02999 0 0.03747" size="0.002" group="3"/>
+            </body>
+          </body>
+          <body name="s_coupler_r" pos="0.012 0 0.047">
+            <joint name="s_coupler_r" class="pin" axis="0 1 0"/>
+            <geom class="visual" mesh="COUPLER_R" pos="-0.012 0 -0.047"/>
+            <geom class="col" type="box" size="0.005 0.0025" fromto="-0.002 0.021 -0.00346 0.03001 0.021 0.05193"/>
+            <site name="s_coupler_r_pin" pos="0.02801 0 0.04847" size="0.002" group="3"/>
+          </body>
+          <body name="s_gear_l" pos="-0.032 0 0">
+            <joint name="s_gear_l" class="gear_s" axis="0 1 0" range="-0.17 0.30"/>
+            <geom class="visual" mesh="GEAR_L"  pos="0.032 0 0"/>
+            <geom class="visual" mesh="CRANK_L" pos="0.032 0 0"/>
+            <geom class="col" type="cylinder" size="0.0339 0.0035" pos="0 -0.0065 0" euler="1.5708 0 0"/>
+            <geom class="col" type="box" size="0.006 0.003" fromto="0 0 0 -0.04129 0 0.06302"/>
+            <body name="s_finger_l" pos="-0.038 0 0.058">
+              <joint name="s_finger_l" class="pin" axis="0 -1 0"/>
+              <geom class="visual" mesh="FINGER_L" pos="0.07 0 -0.058" rgba="0.75 0.75 0.78 1"/>
+              <geom class="col_finger_l" type="box" size="0.0075 0.0075" fromto="-0.00312 0.0107 -0.0039 0.02999 0.0107 0.03747"/>
+              <geom class="col_finger_l" type="box" size="0.0052 0.0075" fromto="0.02773 0.0107 0.03781 0.04067 0.0107 0.12233"/>
+              <geom class="pad" size="0.001 0.0075 0.01975" pos="0.04565 0.0107 0.09673" euler="0 -0.0382 0"/>
+              <site name="s_finger_l_pin" pos="0.02999 0 0.03747" size="0.002" group="3"/>
+            </body>
+          </body>
+          <body name="s_coupler_l" pos="-0.012 0 0.047">
+            <joint name="s_coupler_l" class="pin" axis="0 -1 0"/>
+            <geom class="visual" mesh="COUPLER_L" pos="0.012 0 -0.047"/>
+            <geom class="col" type="box" size="0.005 0.0025" fromto="0.002 0.021 -0.00346 -0.03001 0.021 0.05193"/>
+            <site name="s_coupler_l_pin" pos="-0.02801 0 0.04847" size="0.002" group="3"/>
+          </body>
+        </frame>
+      </frame>
+    </body>
+  </worldbody>
+
+  <custom>
+    <numeric name="gripper_open"    data="0"/>
+    <!-- past contact (~0.20-0.24 rad for a 6-10 mm shaft): stall at the force limit -->
+    <numeric name="gripper_close"   data="0.40"/>
+    <!-- squeezer is a motor: ctrl = gear torque (N m). Constant torque -> ~constant force
+         whatever the bulb size. 0.45 is tuned for 2.5 N per side. -->
+    <!-- release: open past the CAD pose (to the -0.17 rad stop, tips ~+-31 mm) so the bulb clears the
+         pads with +-5 mm / 2 deg holder error -->
+    <numeric name="squeeze_release" data="-0.3"/>
+    <numeric name="squeeze_press"   data="0.45"/>
+  </custom>
+
+  <equality>
+    <joint joint1="g_gear_r" joint2="g_gear_l" polycoef="0 1 0 0 0" solref="0.005 1"/>
+    <connect site1="g_finger_r_pin" site2="g_coupler_r_pin" solref="0.005 1" solimp="0.95 0.99 0.001"/>
+    <connect site1="g_finger_l_pin" site2="g_coupler_l_pin" solref="0.005 1" solimp="0.95 0.99 0.001"/>
+    <joint joint1="s_gear_r" joint2="s_gear_l" polycoef="0 1 0 0 0" solref="0.005 1"/>
+    <connect site1="s_finger_r_pin" site2="s_coupler_r_pin" solref="0.005 1" solimp="0.95 0.99 0.001"/>
+    <connect site1="s_finger_l_pin" site2="s_coupler_l_pin" solref="0.005 1" solimp="0.95 0.99 0.001"/>
+  </equality>
+
+  <actuator>
+    <!-- ctrl = grip gear angle (rad); forcerange = gear torque, ~1.7 N m = ~10 N per finger -->
+    <position name="gripper" joint="g_gear_l" kp="100" dampratio="1" ctrlrange="-0.17 0.40" forcerange="-1.7 1.7"/>
+    <!-- ctrl = squeeze gear torque (N m) -->
+    <motor name="squeezer" joint="s_gear_l" ctrlrange="-0.5 0.5" forcerange="-0.5 0.5"/>
+  </actuator>
+</mujoco>
